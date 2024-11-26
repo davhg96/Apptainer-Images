@@ -1,0 +1,12 @@
+
+#ignore All .Log Files
+*.log
+
+#Ignore the ISo image
+./Ubuntu/ubuntu-20.04.6-desktop-amd64.iso
+
+# ignore sif and other build files that shouldnt be on GH
+
+./SingleTools/singleTools.sif
+./SingleTools/*sbatch
+
