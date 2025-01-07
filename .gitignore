@@ -1,9 +1,8 @@
 
-
 #ignore All .Log Files
 *.log
 # ignore sif and other build files that shouldnt be on GH
 
 
 ./SingleTools/SingleTools.sif
-./SingleTools/*sbatch
+./SingleTools/src/*.sbatch
