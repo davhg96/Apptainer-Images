@@ -6,3 +6,4 @@
 
 ./SingleTools/SingleTools.sif
 ./SingleTools/src/*.sbatch
+./SingleTools/EnvPack/gitCredsHelper.sh

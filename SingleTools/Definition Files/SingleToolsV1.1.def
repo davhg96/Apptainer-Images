@@ -4,6 +4,7 @@ From: ubuntu:20.04
 #Copy needed env files into the machine
 %files 
     ./EnvPack/renv.lock /opt/
+    ./EnvPack/gitCredsHelper.sh /opt/
 
 #Commands to run
 %post
@@ -13,27 +14,38 @@ From: ubuntu:20.04
     apt install -y wget build-essential git curl procps git 
     apt install -y software-properties-common
     add-apt-repository universe
+
     apt-get install -y libgsl-dev libglpk-dev libxml2-dev libhdf5-dev default-jre default-jdk
     apt-get install -y python3 python3-venv python3-pip python3-dev
+    apt-get install -y bzip2 tabix
     #apt install ......
-
-    # Install Mambaforge3 for 64-bit Linux
-   # curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-Linux-x86_64.sh -O 
-   # bash Mambaforge-Linux-x86_64.sh -b -p /opt/mamba24
-   # rm Mambaforge-Linux-x86_64.sh
-   # PATH=/opt/mamba24/bin:$PATH
+   
 
     #Allow PIP to modyfy system packages
     export PIP_BREAK_SYSTEM_PACKAGES=1
 
-    pip install --no-cache-dir jupyterlab jupyterlab-git leidenalg jupyterlab-quarto numpy scanpy MACS2 MACS3 mgatk cellbender scarches scanpy
+    pip install --no-cache-dir jupyterlab jupyterlab-git leidenalg jupyterlab-quarto numpy scanpy MACS2 MACS3 mgatk cellbender scarches scanpy cellphonedb 
+    pip install --no-cache-dir velocyto
 
-
+    #Add python package path
+    export PATH=/usr/local/lib/python3.8/dist-packages:$PATH
 
     mkdir /workspace
-    ls /bin/renv.lock
+    ls /opt/renv.lock
  
+
+    ################
+    #Set Git credentials
+    ################
+
+    echo "Setting up GitHub PAT for devtools"
+
+    bash /opt/gitCredsHelper.sh
+
+    #######################
     #Install R
+    #######################
+
     # Software versions
     export R_VERSION=4.4
     echo "export R_VERSION=${R_VERSION}" >> $SINGULARITY_ENVIRONMENT
@@ -83,19 +95,26 @@ From: ubuntu:20.04
     R --quiet --slave -e 'install.packages("BiocManager",lib= "/usr/lib/R/library/",repos="https://cloud.r-project.org/")'
     R --quiet --slave -e 'install.packages("devtools",lib= "/usr/lib/R/library/",repos="https://cloud.r-project.org/")'
 
+    #R --quiet --slave -e 'Sys.setenv(GITHUB_PAT = Sys.getenv('$KEY'))''
+
     R -e 'BiocManager::install("Rhdf5lib", library = "/usr/lib/R/library/")'
     R -e 'BiocManager::install("rhdf5", library = "/usr/lib/R/library/")'
     R -e 'BiocManager::install("chromVAR", library = "/usr/lib/R/library/")'
     R -e 'BiocManager::install("leiden", library = "/usr/lib/R/library/")'
 
+
 # check iof the file has been copied...
 if [ -f /opt/renv.lock ]; then
-    R -e 'renv::restore(lockfile = "/bin/renv.lock", library = "/usr/lib/R/library/")'
+    R -e 'renv::restore(lockfile = "/opt/renv.lock", library = "/usr/lib/R/library/")'
 else
     echo "ERROR: /opt/renv.lock not found. Aborting setup." >&2
     exit 1
 fi
 
+
+    R -e 'devtools::install_github("zktuong/ktplots", dependencies = TRUE)'
+    R -e 'devtools::install_github("omarwagih/ggseqlogo")'
+    
     # Clean up
     rm -rf /var/lib/apt/lists/*
 
