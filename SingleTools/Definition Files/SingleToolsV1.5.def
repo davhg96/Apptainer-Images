@@ -1,0 +1,280 @@
+BootStrap: docker
+From: ubuntu:24.04
+
+#Copy needed env files into the machine
+%files 
+    ./EnvPack/renv1.5.lock /opt/
+    ./EnvPack/gitCredsHelper.sh /opt/
+
+#Commands to run
+%post
+    TZ=Europe/Berlin
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    apt update -y && apt upgrade -y
+    apt install -y wget build-essential git curl procps git  gcc g++ zlib1g-dev libbz2-dev liblzma-dev
+    apt install -y software-properties-common
+    add-apt-repository universe
+
+    apt-get install -y libgsl-dev libglpk-dev libxml2-dev  libhdf5-dev libhdf5-serial-dev hdf5-tools hdf5-helpers default-jre default-jdk libx11-dev libglu1-mesa-dev xorg-dev 
+    apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev
+    apt-get install -y libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev\
+                         libharfbuzz-dev libfribidi-dev
+    apt-get update
+    apt-get install -y nano bzip2 tabix 
+
+    #apt install ......
+
+    mkdir /workspace
+    ls /opt/renv1.5.lock
+
+####### R package libs
+    apt-get update
+    apt-get install -y --no-install-recommends software-properties-common dirmngr wget
+    apt-get install -y cmake \
+                          libcurl4-openssl-dev \
+                          libssl-dev \
+                          libxml2-dev \
+                          libcairo2-dev \
+                          libxt-dev \
+                          libopenblas-dev \
+                          libuv1-dev \
+                          libgit2-dev \
+                          libssh2-1-dev \
+                          libfontconfig1-dev \
+                          libtiff-dev \
+                          liblapack-dev \
+                          libblas-dev \
+                          libfftw3-dev \
+                          pkg-config \
+                          libgmp-dev \
+                          libmpfr-dev \
+                          gfortran \
+                          libmagick++-dev \
+                          libboost-all-dev \
+                          libhowardhinnant-date-dev libdate-tz3
+
+    # Set C++14 environment variable for pak
+    export CXX_STD=C++14
+    export PKG_CXXFLAGS="-std=c++14"                        
+
+#################
+### Install conda
+################# 
+    wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh
+    bash /tmp/miniconda.sh -b -p /opt/miniconda3
+    rm /tmp/miniconda.sh
+    export PATH=/opt/miniconda3/bin:$PATH
+    . /opt/miniconda3/etc/profile.d/conda.sh
+
+    # Init conda for non-interactive shells 
+    export CONDA_PLUGINS_AUTO_ACCEPT_TOS=yes
+    conda config --set auto_activate_base false
+
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+    conda update -y -n base conda
+    conda install -n base -c conda-forge python=3.11.0  pip 
+
+
+    # Add channels (priority order: conda-forge > bioconda > defaults)
+
+    conda config --add channels defaults
+    conda config --add channels bioconda
+    conda config --add channels conda-forge
+    conda config --set channel_priority strict
+
+    echo ". /opt/miniconda3/etc/profile.d/conda.sh" >> /etc/bash.bashrc
+    echo "conda activate base" >> /etc/bash.bashrc
+
+
+#################################
+####### Install python and jupyter
+#################################
+    #apt-get install -y python3 python3-venv python3-pip python3-dev 
+    #    #Allow PIP to modyfy system packages
+
+    export PIP_BREAK_SYSTEM_PACKAGES=1
+
+    #Add python package path
+    #export PATH=/usr/local/lib/python3/dist-packages:$PATH
+
+####Install jupyterlab
+    conda run -n base python -m pip install jupyterlab jupyterlab-git jupyterlab-quarto lckr_jupyterlab_variableinspector jupyterlab_theme_solarized_dark boost
+
+        # Create the scRNA environment with Python 3.11.0
+    conda create -y -n scrna python=3.11.0 pip ipykernel jupyter
+
+    # Now upgrade
+     conda run -n scrna python -m pip install --upgrade pip setuptools==79.0.1 wheel
+
+    conda install -y -n base nb_conda_kernels
+    conda install -y -n base ipykernel r-irkernel
+    conda install -y -n scrna ipykernel 
+
+####################
+#####Set Git credentials
+####################
+
+    echo "Setting up GitHub PAT for devtools"
+
+    bash /opt/gitCredsHelper.sh
+
+###########################
+#####Install R
+##########################
+
+    # Software versions
+    export R_VERSION=4.4.2-1.2404.0
+    echo "export R_VERSION=${R_VERSION}" >> $SINGULARITY_ENVIRONMENT
+    # Install R
+    apt-get update
+
+    wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | \
+      tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
+    add-apt-repository \
+      "deb https://cloud.r-project.org/bin/linux/ubuntu $(lsb_release -cs)-cran40/"
+    cat /etc/apt/sources.list
+    apt-get update
+    apt-get upgrade
+    apt-get install -y \
+      r-base=${R_VERSION}* \
+      r-base-dev=${R_VERSION}* \
+      r-base-core=${R_VERSION}* \
+      r-recommended=${R_VERSION}* \
+      r-base-html=${R_VERSION}* \
+      r-doc-html=${R_VERSION}* \
+
+
+
+    # Add a default CRAN mirror
+    echo "options(repos = c(CRAN = 'https://cran.rstudio.com/'), download.file.method = 'libcurl')" >> /usr/lib/R/etc/Rprofile.site
+
+    # Add a directory for host R libraries
+    mkdir -p /library
+    echo "R_LIBS_SITE=/library:\${R_LIBS_SITE}" >> /usr/lib/R/etc/Renviron.site
+
+    R -e 'Sys.setenv(
+                    ARROW_R_DEV = "TRUE",
+                    LIBARROW_BINARY = "FALSE",
+                    ARROW_USE_PKG_CONFIG = "FALSE",
+                    CXX17 = "g++",
+                     CXX17STD = "-std=gnu++17" )'
+    # Install Packages
+    # Install R packages for Jupyter integration
+    R -e 'install.packages(c("IRkernel", "IRdisplay"), repos="https://cloud.r-project.org/")'
+
+    # Set up IRkernel to make R available as a Jupyter kernel
+    R -e 'IRkernel::installspec(user = FALSE)'
+
+    R -e 'install.packages("renv",lib= "/usr/lib/R/library/",dependencies = TRUE)'
+
+    #Install R library
+    R --quiet --slave -e 'install.packages(c("devtools","BiocManager","remotes","Matrix"), lib= "/usr/lib/R/library/", dependencies = TRUE)'
+
+    R -e 'devtools::install_github("YuLab-SMU/ggtree",lib = "/usr/lib/R/library/")'
+
+    R -e 'install.packages("ggiraph", repos="https://cloud.r-project.org",lib = "/usr/lib/R/library/")'
+
+    R -e 'remotes::install_github("mojaveazure/loomR",lib = "/usr/lib/R/library/")' 
+    R -e 'BiocManager::install("pcaMethods",lib= "/usr/lib/R/library/",dependencies = TRUE)'
+
+
+    R --quiet --slave -e 'install.packages(c("ape","nlme","cluster","survival"), lib= "/usr/lib/R/library/", dependencies = TRUE)'
+
+    R --quiet --slave -e 'BiocManager::install(c("treeio","RcisTarget"),lib= "/usr/lib/R/library/",  dependencies = TRUE)'
+    R -e 'remotes::install_github("bnprks/BPCells/r",lib = "/usr/lib/R/library/")'
+
+    
+###############
+    # check if the renv has been copied...
+    if [ -f /opt/renv1.5.lock ]; then
+        R -e 'renv::restore(lockfile = "/opt/renv1.5.lock", library = "/usr/lib/R/library/", exclude = c("ggtree","ggiraph","velocyto.R","lambda 2.r"))'
+     else
+       echo "ERROR: /opt/renv.lock not found. Aborting setup." >&2
+        exit 1
+     fi
+
+
+
+
+#####These should be installed by here
+    R -e 'remotes::install_github("mojaveazure/seurat-disk",lib = "/usr/lib/R/library/")'
+    R -e 'remotes::install_github("satijalab/seurat-wrappers",lib = "/usr/lib/R/library/")'
+    R -e 'devtools::install_github("cellgeni/schard",lib = "/usr/lib/R/library/")'
+    R -e 'devtools::install_github("aertslab/SCopeLoomR",lib = "/usr/lib/R/library/")'
+    R -e 'devtools::install_github("aertslab/SCENIC",lib = "/usr/lib/R/library/")'
+
+
+    #install deps for cellchat
+    R -e 'devtools::install_github("JEFworks-Lab/MERINGUE",lib = "/usr/lib/R/library/")'
+    R -e 'devtools::install_github("KlugerLab/ALRA",lib = "/usr/lib/R/library/")'
+    R -e 'devtools::install_github("zdebruine/RcppML",lib = "/usr/lib/R/library/")'
+    R -e 'devtools::install_github("jokergoo/circlize",lib = "/usr/lib/R/library/")'
+    R -e 'devtools::install_github("jokergoo/ComplexHeatmap",lib = "/usr/lib/R/library/")'
+    #CellChat
+    R -e 'devtools::install_github("jinworks/SpatialCellChat", lib = "/usr/lib/R/library/")'
+    R -e 'devtools::install_github("jinworks/CellChat", lib = "/usr/lib/R/library/")'
+
+
+
+
+### install the rest of conda
+
+   conda run -n scrna python -m ipykernel install --prefix=/opt/miniconda3 --name scrna \
+             --display-name "Python (scrna)"
+
+ ####Install everything in env for R to see with reticulate
+
+    #Install base analysis python
+    conda install -y -n scrna -c conda-forge -c bioconda macs2 datrie cython bedtools \
+                                                pybedtools htslib
+
+    conda run -n scrna python -m pip install --no-cache-dir \
+                numpy scanpy scarches leidenalg cellbender scvelo cellphonedb\
+                umap-learn igraph anndata  ipykernel \
+                scvi-tools cellrank pyscenic palantir poetry poetry-core hatchling hatch-vcs
+
+  
+
+    #ScenicPlus
+    git clone https://github.com/aertslab/scenicplus
+    cd scenicplus
+    git checkout main
+    conda run -n scrna python -m pip install  --no-build-isolation -r requirements.txt --no-deps
+
+
+ 
+# Clone the repo
+    git clone https://github.com/velocyto-team/velocyto.R /tmp/velocyto.R
+
+    # Patch line 48: fix the format-security warning
+    sed -i 's/Rf_warning(es.str().c_str());/Rf_warning("%s", es.str().c_str());/' /tmp/velocyto.R/src/routines.cpp
+
+    # Install from patched source
+    R CMD INSTALL /tmp/velocyto.R
+
+    # Clean up
+    rm -rf /tmp/velocyto.R
+
+    
+    # Clean up
+    rm -rf /var/lib/apt/lists/*
+    rm /opt/gitCredsHelper.sh
+
+
+%runscript
+    jupyter lab --port 3333 --ip=0.0.0.0 --allow-root --no-browser
+
+%environment
+    . /opt/miniconda3/etc/profile.d/conda.sh
+    export PATH=/opt/miniconda3/bin:$PATH
+    conda activate base   # or whatever env you use
+    export PATH="/usr/local/bin:$PATH"
+    export PIP_BREAK_SYSTEM_PACKAGES=1
+
+%labels
+    Author: David Hidalgo
+    Version 1.5
+    R_Version       4.4.2
+    Seurat_Version  5.x
+    Description     Ubuntu 24.04 | R 4.4.2 | Seurat v5 + full scRNA-seq/ATAC stack + renv

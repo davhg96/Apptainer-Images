@@ -3,7 +3,7 @@ From: ubuntu:20.04
 
 #Copy needed env files into the machine
 %files 
-    ./EnvPack/renv.lock /opt/
+    ./EnvPack/renv1.2.lock /opt/
     ./EnvPack/gitCredsHelper.sh /opt/
 
 #Commands to run
@@ -16,7 +16,7 @@ From: ubuntu:20.04
     add-apt-repository universe
 
     apt-get install -y libgsl-dev libglpk-dev libxml2-dev libhdf5-dev default-jre default-jdk
-    apt-get install -y  libudunits2-dev libgdal-dev libgeos-dev libproj-dev
+    apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev
     apt-get install -y libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev libharfbuzz-dev libfribidi-dev
     apt-get install -y python3 python3-venv python3-pip python3-dev
     apt-get install -y bzip2 tabix
@@ -26,14 +26,13 @@ From: ubuntu:20.04
     #Allow PIP to modyfy system packages
     export PIP_BREAK_SYSTEM_PACKAGES=1
 
-    pip install --no-cache-dir jupyterlab jupyterlab-git leidenalg jupyterlab-quarto numpy scanpy MACS2 MACS3 mgatk cellbender scarches scanpy cellphonedb 
-    pip install --no-cache-dir velocyto
+    pip install --no-cache-dir jupyterlab jupyterlab-git jupyterlab-quarto numpy scanpy
 
     #Add python package path
     export PATH=/usr/local/lib/python3.8/dist-packages:$PATH
 
     mkdir /workspace
-    ls /opt/renv.lock
+    ls /opt/renv1.2.lock
  
 
     ################
@@ -49,7 +48,7 @@ From: ubuntu:20.04
     #######################
 
     # Software versions
-    export R_VERSION=4.4
+    export R_VERSION=4.5
     echo "export R_VERSION=${R_VERSION}" >> $SINGULARITY_ENVIRONMENT
     # Install R
     apt-get update
@@ -60,7 +59,7 @@ From: ubuntu:20.04
     wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | \
       tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
     add-apt-repository \
-      "deb https://cloud.r-project.org/bin/linux/ubuntu $(lsb_release -cs)-cran40/"
+      "deb https://cloud.r-project.org/bin/linux/ubuntu focal-cran40/"
     cat /etc/apt/sources.list
     apt-get update
     apt-get upgrade
@@ -76,18 +75,18 @@ From: ubuntu:20.04
       libxml2-dev \
       libcairo2-dev \
       libxt-dev \
-      libopenblas-dev 
+      libopenblas-dev
 
     # Add a default CRAN mirror
     echo "options(repos = c(CRAN = 'https://cran.rstudio.com/'), download.file.method = 'libcurl')" >> /usr/lib/R/etc/Rprofile.site
 
     # Add a directory for host R libraries
-    #mkdir -p /library
-    #echo "R_LIBS_SITE=/library:\${R_LIBS_SITE}" >> /usr/lib/R/etc/Renviron.site
+    mkdir -p /library
+    echo "R_LIBS_SITE=/library:\${R_LIBS_SITE}" >> /usr/lib/R/etc/Renviron.site
 
 
-    #install Packages
-# Install R packages for Jupyter integration
+    # Install Packages
+    # Install R packages for Jupyter integration
     R -e "install.packages(c('IRkernel', 'IRdisplay'), repos='https://cloud.r-project.org/')"
 
     # Set up IRkernel to make R available as a Jupyter kernel
@@ -97,23 +96,30 @@ From: ubuntu:20.04
     R --quiet --slave -e 'install.packages("renv", lib= "/usr/lib/R/library/",repos="https://cloud.r-project.org/")' 
     R --quiet --slave -e 'install.packages("BiocManager",lib= "/usr/lib/R/library/",repos="https://cloud.r-project.org/")'
     R --quiet --slave -e 'install.packages("devtools",lib= "/usr/lib/R/library/",repos="https://cloud.r-project.org/")'
+    R --quiet --slave -e 'install.packages("RSQLite", lib= "/usr/lib/R/library/",repos="https://cloud.r-project.org/")'
+    R --quiet --slave -e 'install.packages("remotes",lib= "/usr/lib/R/library/",repos="https://cloud.r-project.org/")'
+    R --quiet --slave -e 'install.packages("seurat",lib= "/usr/lib/R/library/",repos="https://cloud.r-project.org/")'
+    R --quiet --slave -e 'install.packages("seurat-disk",lib= "/usr/lib/R/library/",repos="https://cloud.r-project.org/")'
 
-
+    R -e 'BiocManager::install("Biostrings", library = "/usr/lib/R/library/")' 
     R -e 'BiocManager::install("Rhdf5lib", library = "/usr/lib/R/library/")'
     R -e 'BiocManager::install("rhdf5", library = "/usr/lib/R/library/")'
-    R -e 'BiocManager::install("chromVAR", library = "/usr/lib/R/library/")'
     R -e 'BiocManager::install("leiden", library = "/usr/lib/R/library/")'
-    R -e 'devtools::install_github("zktuong/ktplots", dependencies = TRUE)'
-    R -e 'devtools::install_github("omarwagih/ggseqlogo")'
-    R -e 'devtools::install_github("ctlab/fgsea")'
+    R -e 'BiocManager::install("AnnotationDbi",library = "/usr/lib/R/library/")'
+
+    R -e 'remotes::install_github("satijalab/seurat", "seurat5", quiet = TRUE)'
+    R -e 'remotes::install_github("mojaveazure/seurat-disk")'
+    R -e 'BiocManager::install(c("rhdf5", "SingleCellExperiment"))'
+    R -e 'devtools::install_github("cellgeni/schard",library = "/usr/lib/R/library/")'
+
 
 # check iof the file has been copied...
-if [ -f /opt/renv.lock ]; then
-    R -e 'renv::restore(lockfile = "/opt/renv.lock", library = "/usr/lib/R/library/")'
-else
-    echo "ERROR: /opt/renv.lock not found. Aborting setup." >&2
-    exit 1
-fi
+# if [ -f /opt/renv1.2.lock ]; then
+#    R -e 'renv::restore(lockfile = "/opt/renv1.2.lock", library = "/usr/lib/R/library/")'
+# else
+#    echo "ERROR: /opt/renv.lock not found. Aborting setup." >&2
+#    exit 1
+# fi
 
 
     
@@ -131,4 +137,4 @@ fi
 
 %labels
     Author: David Hidalgo
-    Version 1.0
+    Version 1.2
